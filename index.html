@@ -33,7 +33,7 @@
         }
     </style>
 </head>
-<!-- Domyślnie startujemy z ciemnymi klasami -->
+<!-- Domyślnie startujemy z ciemnymi klasami, zanim React przejmie kontrolę, aby uniknąć mignięcia -->
 <body class="h-[100dvh] overflow-hidden transition-colors duration-300 bg-slate-900 text-slate-100">
 
 <div id="root" class="h-full"></div>
@@ -150,7 +150,7 @@
         const [activeDay, setActiveDay] = useState(null);
         const [todayId, setTodayId] = useState('monday');
         const [currentHour, setCurrentHour] = useState(new Date().getHours());
-        // Domyślnie TRUE (ciemny motyw)
+        // Zmiana: Domyślnie TRUE (ciemny motyw)
         const [darkMode, setDarkMode] = useState(true);
 
         useEffect(() => {
@@ -161,11 +161,11 @@
             const timer = setInterval(() => setCurrentHour(new Date().getHours()), 60000);
 
             const currentWeek = getWeekId();
-            // Klucze v4
             const savedWeek = localStorage.getItem('app_week_id_v4');
             const savedData = localStorage.getItem('app_data_v4');
             const savedTheme = localStorage.getItem('app_theme');
 
+            // Logika: Jeśli zapisano 'light', zmień na jasny. W przeciwnym razie (brak zapisu lub 'dark') zostaw ciemny.
             if (savedTheme === 'light') setDarkMode(false);
 
             if (savedWeek !== currentWeek) {
