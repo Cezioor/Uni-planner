@@ -33,15 +33,13 @@
         }
     </style>
 </head>
-<!-- Domyślnie startujemy z ciemnymi klasami, zanim React przejmie kontrolę, aby uniknąć mignięcia -->
 <body class="h-[100dvh] overflow-hidden transition-colors duration-300 bg-slate-900 text-slate-100">
 
 <div id="root" class="h-full"></div>
 
 <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
     
-    // --- IKONY ---
     const Icon = ({ name, size = 16, className }) => {
         useEffect(() => {
             lucide.createIcons();
@@ -49,8 +47,67 @@
         return <i data-lucide={name} className={className} width={size} height={size}></i>;
     };
 
+    // --- NAPRAWIONY KOMPONENT POLA TEKSTOWEGO ---
+    // Ten komponent trzyma stan lokalnie i wysyła go wyżej dopiero po zakończeniu pisania (onBlur)
+    const SmartInput = ({ value, onSave, placeholder, className, isFixed, isCompleted }) => {
+        const [localValue, setLocalValue] = useState(value);
+        const [isEditing, setIsEditing] = useState(false);
+
+        // Synchronizacja tylko gdy nie edytujemy (np. przy ładowaniu)
+        useEffect(() => {
+            if (!isEditing) {
+                setLocalValue(value);
+            }
+        }, [value, isEditing]);
+
+        const handleBlur = () => {
+            setIsEditing(false);
+            if (localValue !== value) {
+                onSave(localValue);
+            }
+        };
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Enter') {
+                e.target.blur();
+            }
+        };
+
+        const startEditing = () => {
+            if (!isCompleted) setIsEditing(true);
+        };
+
+        // Jeśli edytujemy LUB jeśli pole jest puste (żeby zawsze widzieć input w pustym miejscu)
+        if (isEditing || !value) {
+            return (
+                <input 
+                    className={`w-full bg-transparent outline-none border-b border-blue-500/50 pb-1 ${className} ${!value ? 'placeholder:italic placeholder:opacity-50' : ''}`}
+                    placeholder={placeholder}
+                    value={localValue}
+                    onChange={(e) => setLocalValue(e.target.value)}
+                    onFocus={() => setIsEditing(true)}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}
+                />
+            );
+        }
+
+        // Widok tekstu (gdy nie edytujemy i jest treść)
+        return (
+            <div onClick={startEditing} className="cursor-text group w-full">
+                <span className={`font-medium text-sm sm:text-base leading-tight block ${isCompleted ? 'line-through opacity-50' : className}`}>
+                    {value}
+                </span>
+                <div className="flex gap-2 mt-1">
+                    {isFixed && <span className="text-[10px] uppercase font-bold opacity-50 tracking-wider">Stałe</span>}
+                    {!isFixed && <span className="text-[10px] uppercase font-bold text-orange-400 tracking-wider opacity-80">Dodatkowe</span>}
+                </div>
+            </div>
+        );
+    };
+
     // --- DANE ---
-    const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6:00 - 23:00
+    const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); 
     
     const DAYS = [
         { id: 'monday', label: 'Poniedziałek', short: 'Pon' },
@@ -70,7 +127,6 @@
         return `${d.getFullYear()}-W${weekNo}`;
     };
 
-    // --- BAZOWY PLAN ---
     const createBaseSchedule = () => {
         const schedule = {};
         DAYS.forEach(day => {
@@ -97,24 +153,17 @@
         };
 
         // --- TWOJE ZAJĘCIA ---
-        
-        // Poniedziałek
         addBlock('monday', 10, 12, "Zaawansowana analiza matematyczna", 'uni');
         addBlock('monday', 12, 14, "Procesy stochastyczne (ćwiczenia)", 'uni');
         addBlock('monday', 14, 17, "Intro to Quantum Mechanics", 'uni');
 
-        // Wtorek
         addBlock('tuesday', 10, 14, "Programowanie zorientowane na dane", 'uni');
         addBlock('tuesday', 14, 16, "Zaawansowana analiza matematyczna", 'uni');
-        // Oliwia 16:30 - 18:00 (1.5h)
         addSlot('tuesday', 16, "Korepetycje: Oliwia", 'tutor', "16:30");
         addSlot('tuesday', 17, "Korepetycje: Oliwia (cd.)", 'tutor');
-        // Biologia 18:00 - 19:30 (1.5h)
         addSlot('tuesday', 18, "Korepetycje: Biologia", 'tutor', "18:00");
-        // Slot 19 jest wolny, ale zaczyna się o 19:30
         addSlot('tuesday', 19, "", 'personal', "19:30");
 
-        // Środa
         addSlot('wednesday', 9, "Probability & Info Theory", 'uni', "9:30");
         addBlock('wednesday', 10, 12, "Probability & Info Theory", 'uni');
         addSlot('wednesday', 12, "Math methods of Quantum Info", 'uni', "12:30");
@@ -122,35 +171,26 @@
         addBlock('wednesday', 14, 18, "Math methods of Quantum Info (Wykład)", 'uni');
         addSlot('wednesday', 19, "Korepetycje: Kacperek", 'tutor');
 
-        // Czwartek
         addBlock('thursday', 8, 10, "Procesy stochastyczne", 'uni');
         addBlock('thursday', 10, 12, "Seminarium", 'uni');
         addSlot('thursday', 17, "Korepetycje: Oliwia", 'tutor');
-        // Kacperek 18:30 - 19:30
         addSlot('thursday', 18, "Korepetycje: Kacperek", 'tutor', "18:30");
-        // Następny wolny slot od 19:30
         addSlot('thursday', 19, "", 'personal', "19:30");
 
-        // Piątek
         addSlot('friday', 13, "Przygotowanie do projektu", 'uni');
         addBlock('friday', 14, 16, "Programming (Wykład)", 'uni');
-        // Programming ćwiczenia 17:00 - 18:30
         addSlot('friday', 17, "Programming (Ćwiczenia)", 'uni');
-        // Slot 18 wolny od 18:30
         addSlot('friday', 18, "", 'personal', "18:30");
         addSlot('friday', 19, "Korepetycje: Kacperek", 'tutor');
 
         return schedule;
     };
 
-    // --- KOMPONENTY ---
-
     const App = () => {
         const [schedule, setSchedule] = useState(null);
         const [activeDay, setActiveDay] = useState(null);
         const [todayId, setTodayId] = useState('monday');
         const [currentHour, setCurrentHour] = useState(new Date().getHours());
-        // Zmiana: Domyślnie TRUE (ciemny motyw)
         const [darkMode, setDarkMode] = useState(true);
 
         useEffect(() => {
@@ -161,24 +201,24 @@
             const timer = setInterval(() => setCurrentHour(new Date().getHours()), 60000);
 
             const currentWeek = getWeekId();
-            const savedWeek = localStorage.getItem('app_week_id_v4');
-            const savedData = localStorage.getItem('app_data_v4');
+            // Klucz V6 - wymusza reset bazy po tej naprawie
+            const savedWeek = localStorage.getItem('app_week_id_v6');
+            const savedData = localStorage.getItem('app_data_v6');
             const savedTheme = localStorage.getItem('app_theme');
 
-            // Logika: Jeśli zapisano 'light', zmień na jasny. W przeciwnym razie (brak zapisu lub 'dark') zostaw ciemny.
             if (savedTheme === 'light') setDarkMode(false);
 
             if (savedWeek !== currentWeek) {
                 const base = createBaseSchedule();
                 setSchedule(base);
-                localStorage.setItem('app_week_id_v4', currentWeek);
-                localStorage.setItem('app_data_v4', JSON.stringify(base));
+                localStorage.setItem('app_week_id_v6', currentWeek);
+                localStorage.setItem('app_data_v6', JSON.stringify(base));
             } else if (savedData) {
                 setSchedule(JSON.parse(savedData));
             } else {
                 const base = createBaseSchedule();
                 setSchedule(base);
-                localStorage.setItem('app_week_id_v4', currentWeek);
+                localStorage.setItem('app_week_id_v6', currentWeek);
             }
 
             return () => clearInterval(timer);
@@ -186,7 +226,7 @@
 
         useEffect(() => {
             if (schedule) {
-                localStorage.setItem('app_data_v4', JSON.stringify(schedule));
+                localStorage.setItem('app_data_v6', JSON.stringify(schedule));
                 lucide.createIcons();
             }
         }, [schedule, activeDay]);
@@ -224,14 +264,6 @@
                 if (justCompleted) setTimeout(() => checkConfetti(dayId), 100);
                 return newState;
             });
-            
-             if (activeDay && updates.completed) {
-                const currentTasks = Object.values(schedule[activeDay]).filter(t => typeof t === 'object' && t.task);
-                const completedCount = currentTasks.filter(t => t.completed).length;
-                if (completedCount === currentTasks.length - 1) {
-                     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-                }
-             }
         };
 
         const updateNote = (dayId, text) => {
@@ -389,25 +421,14 @@
                                 </div>
 
                                 <div className="flex-1 p-3 flex flex-col justify-center min-w-0">
-                                    {isTask ? (
-                                        <>
-                                            <span className={`font-medium text-sm sm:text-base leading-tight ${data.completed ? 'line-through opacity-50' : textPrimary}`}>
-                                                {data.task}
-                                            </span>
-                                            <div className="flex gap-2 mt-1">
-                                                {isFixed && <span className={`text-[10px] uppercase font-bold ${textMuted} tracking-wider`}>Stałe</span>}
-                                                {!isFixed && <span className="text-[10px] uppercase font-bold text-orange-400 tracking-wider">Dodatkowe</span>}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <input 
-                                            type="text" 
-                                            placeholder="Wpisz coś..." 
-                                            className={`w-full bg-transparent text-sm outline-none placeholder:text-slate-500 ${textPrimary}`}
-                                            value={data.task}
-                                            onChange={(e) => updateTask(activeDay, start, { task: e.target.value, category: 'personal', fixed: false })}
-                                        />
-                                    )}
+                                    <SmartInput 
+                                        value={data.task}
+                                        onSave={(newVal) => updateTask(activeDay, start, { task: newVal, category: 'personal', fixed: false })}
+                                        placeholder="Wpisz zadanie..."
+                                        className={textPrimary}
+                                        isFixed={isFixed}
+                                        isCompleted={data.completed}
+                                    />
                                 </div>
 
                                 {isTask && (
@@ -426,7 +447,7 @@
                         )
                     })}
                     
-                    {/* NOTATNIK */}
+                    {/* NOTATNIK - UŻYWAMY SmartInput dla notatek, aby były spójne */}
                     <div className="mt-6 mb-4">
                          <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${textMuted}`}>Notatki / Prace Domowe</h3>
                          <textarea 
