@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Twój Planer</title>
+    
+    <!-- Style i Frameworki -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Ikony Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Biblioteka do konfetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body { -webkit-tap-highlight-color: transparent; user-select: none; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #64748b; border-radius: 2px; }
+        
+        @keyframes pulse-dot {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .pulse-animation {
+            animation: pulse-dot 2s infinite;
+        }
+    </style>
+</head>
+<!-- Domyślnie startujemy z ciemnymi klasami -->
+<body class="h-[100dvh] overflow-hidden transition-colors duration-300 bg-slate-900 text-slate-100">
+
+<div id="root" class="h-full"></div>
+
+<script type="text/babel">
+    const { useState, useEffect } = React;
+    
+    // --- IKONY ---
+    const Icon = ({ name, size = 16, className }) => {
+        useEffect(() => {
+            lucide.createIcons();
+        }, [name]);
+        return <i data-lucide={name} className={className} width={size} height={size}></i>;
+    };
+
+    // --- DANE ---
+    const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6:00 - 23:00
+    
+    const DAYS = [
+        { id: 'monday', label: 'Poniedziałek', short: 'Pon' },
+        { id: 'tuesday', label: 'Wtorek', short: 'Wt' },
+        { id: 'wednesday', label: 'Środa', short: 'Śr' },
+        { id: 'thursday', label: 'Czwartek', short: 'Czw' },
+        { id: 'friday', label: 'Piątek', short: 'Pt' },
+        { id: 'saturday', label: 'Sobota', short: 'Sob' },
+        { id: 'sunday', label: 'Niedziela', short: 'Ndz' }
+    ];
+
+    const getWeekId = () => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return `${d.getFullYear()}-W${weekNo}`;
+    };
+
+    // --- BAZOWY PLAN ---
+    const createBaseSchedule = () => {
+        const schedule = {};
+        DAYS.forEach(day => {
+            schedule[day.id] = { note: "" };
+            HOURS.forEach(h => {
+                schedule[day.id][h] = { task: "", completed: false, category: 'personal', fixed: false, customTime: null };
+            });
+        });
+
+        const addBlock = (dayId, start, end, name, cat, customTimeStr = null) => {
+            for(let h=start; h<end; h++) {
+                if(schedule[dayId][h]) {
+                    schedule[dayId][h] = { 
+                        task: name, completed: false, category: cat, fixed: true,
+                        customTime: (h === start) ? customTimeStr : null 
+                    };
+                }
+            }
+        };
+        const addSlot = (dayId, h, name, cat, customTimeStr = null) => {
+             if(schedule[dayId][h]) {
+                schedule[dayId][h] = { task: name, completed: false, category: cat, fixed: true, customTime: customTimeStr };
+             }
+        };
+
+        // --- TWOJE ZAJĘCIA ---
+        
+        // Poniedziałek
+        addBlock('monday', 10, 12, "Zaawansowana analiza matematyczna", 'uni');
+        addBlock('monday', 12, 14, "Procesy stochastyczne (ćwiczenia)", 'uni');
+        addBlock('monday', 14, 17, "Intro to Quantum Mechanics", 'uni');
+
+        // Wtorek
+        addBlock('tuesday', 10, 14, "Programowanie zorientowane na dane", 'uni');
+        addBlock('tuesday', 14, 16, "Zaawansowana analiza matematyczna", 'uni');
+        // Oliwia 16:30 - 18:00 (1.5h)
+        addSlot('tuesday', 16, "Korepetycje: Oliwia", 'tutor', "16:30");
+        addSlot('tuesday', 17, "Korepetycje: Oliwia (cd.)", 'tutor');
+        // Biologia 18:00 - 19:30 (1.5h)
+        addSlot('tuesday', 18, "Korepetycje: Biologia", 'tutor', "18:00");
+        // Slot 19 jest wolny, ale zaczyna się o 19:30
+        addSlot('tuesday', 19, "", 'personal', "19:30");
+
+        // Środa
+        addSlot('wednesday', 9, "Probability & Info Theory", 'uni', "9:30");
+        addBlock('wednesday', 10, 12, "Probability & Info Theory", 'uni');
+        addSlot('wednesday', 12, "Math methods of Quantum Info", 'uni', "12:30");
+        addSlot('wednesday', 13, "Math methods of Quantum Info", 'uni');
+        addBlock('wednesday', 14, 18, "Math methods of Quantum Info (Wykład)", 'uni');
+        addSlot('wednesday', 19, "Korepetycje: Kacperek", 'tutor');
+
+        // Czwartek
+        addBlock('thursday', 8, 10, "Procesy stochastyczne", 'uni');
+        addBlock('thursday', 10, 12, "Seminarium", 'uni');
+        addSlot('thursday', 17, "Korepetycje: Oliwia", 'tutor');
+        // Kacperek 18:30 - 19:30
+        addSlot('thursday', 18, "Korepetycje: Kacperek", 'tutor', "18:30");
+        // Następny wolny slot od 19:30
+        addSlot('thursday', 19, "", 'personal', "19:30");
+
+        // Piątek
+        addSlot('friday', 13, "Przygotowanie do projektu", 'uni');
+        addBlock('friday', 14, 16, "Programming (Wykład)", 'uni');
+        // Programming ćwiczenia 17:00 - 18:30
+        addSlot('friday', 17, "Programming (Ćwiczenia)", 'uni');
+        // Slot 18 wolny od 18:30
+        addSlot('friday', 18, "", 'personal', "18:30");
+        addSlot('friday', 19, "Korepetycje: Kacperek", 'tutor');
+
+        return schedule;
+    };
+
+    // --- KOMPONENTY ---
+
+    const App = () => {
+        const [schedule, setSchedule] = useState(null);
+        const [activeDay, setActiveDay] = useState(null);
+        const [todayId, setTodayId] = useState('monday');
+        const [currentHour, setCurrentHour] = useState(new Date().getHours());
+        // Domyślnie TRUE (ciemny motyw)
+        const [darkMode, setDarkMode] = useState(true);
+
+        useEffect(() => {
+            const todayIndex = new Date().getDay();
+            const map = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday', 0: 'sunday' };
+            setTodayId(map[todayIndex] || 'monday');
+
+            const timer = setInterval(() => setCurrentHour(new Date().getHours()), 60000);
+
+            const currentWeek = getWeekId();
+            // Klucze v4
+            const savedWeek = localStorage.getItem('app_week_id_v4');
+            const savedData = localStorage.getItem('app_data_v4');
+            const savedTheme = localStorage.getItem('app_theme');
+
+            if (savedTheme === 'light') setDarkMode(false);
+
+            if (savedWeek !== currentWeek) {
+                const base = createBaseSchedule();
+                setSchedule(base);
+                localStorage.setItem('app_week_id_v4', currentWeek);
+                localStorage.setItem('app_data_v4', JSON.stringify(base));
+            } else if (savedData) {
+                setSchedule(JSON.parse(savedData));
+            } else {
+                const base = createBaseSchedule();
+                setSchedule(base);
+                localStorage.setItem('app_week_id_v4', currentWeek);
+            }
+
+            return () => clearInterval(timer);
+        }, []);
+
+        useEffect(() => {
+            if (schedule) {
+                localStorage.setItem('app_data_v4', JSON.stringify(schedule));
+                lucide.createIcons();
+            }
+        }, [schedule, activeDay]);
+
+        useEffect(() => {
+            localStorage.setItem('app_theme', darkMode ? 'dark' : 'light');
+            if (darkMode) {
+                document.body.classList.add('bg-slate-900', 'text-slate-100');
+                document.body.classList.remove('bg-slate-50', 'text-slate-800');
+            } else {
+                document.body.classList.add('bg-slate-50', 'text-slate-800');
+                document.body.classList.remove('bg-slate-900', 'text-slate-100');
+            }
+        }, [darkMode]);
+
+        const checkConfetti = (dayId) => {
+            const tasks = Object.values(schedule[dayId]).filter(t => typeof t === 'object' && t.task && t.task.trim());
+            if (tasks.length > 0 && tasks.every(t => t.completed)) {
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            }
+        };
+
+        const updateTask = (dayId, hour, updates, span = 1) => {
+            setSchedule(prev => {
+                const dayData = { ...prev[dayId] };
+                let justCompleted = false;
+                for (let h = 0; h < span; h++) {
+                    const currentH = hour + h;
+                    if (dayData[currentH]) {
+                         if (updates.completed && !dayData[currentH].completed) justCompleted = true;
+                         dayData[currentH] = { ...dayData[currentH], ...updates };
+                    }
+                }
+                const newState = { ...prev, [dayId]: dayData };
+                if (justCompleted) setTimeout(() => checkConfetti(dayId), 100);
+                return newState;
+            });
+            
+             if (activeDay && updates.completed) {
+                const currentTasks = Object.values(schedule[activeDay]).filter(t => typeof t === 'object' && t.task);
+                const completedCount = currentTasks.filter(t => t.completed).length;
+                if (completedCount === currentTasks.length - 1) {
+                     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                }
+             }
+        };
+
+        const updateNote = (dayId, text) => {
+            setSchedule(prev => ({
+                ...prev,
+                [dayId]: { ...prev[dayId], note: text }
+            }));
+        };
+
+        const calculateProgress = (daySchedule) => {
+            const tasks = Object.values(daySchedule).filter(t => typeof t === 'object' && t.task && t.task.trim());
+            if (!tasks.length) return 0;
+            const done = tasks.filter(t => t.completed).length;
+            return Math.round((done / tasks.length) * 100);
+        };
+
+        const calculateTutorHours = (daySchedule) => {
+             const tasks = Object.values(daySchedule).filter(t => typeof t === 'object' && t.task && t.category === 'tutor' && t.completed);
+             return tasks.length;
+        };
+
+        if (!schedule) return <div className="flex h-screen items-center justify-center">Ładowanie planu...</div>;
+
+        const cardClass = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+        const textMuted = darkMode ? 'text-slate-400' : 'text-slate-500';
+        const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-800';
+        const bgHover = darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-100';
+
+        // --- WIDOK TYGODNIA ---
+        if (!activeDay) {
+            return (
+                <div className={`max-w-md mx-auto h-full flex flex-col ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                    <div className={`p-6 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b shadow-sm flex justify-between items-center`}>
+                        <div>
+                            <h1 className={`text-2xl font-bold ${textPrimary} flex items-center gap-2`}>
+                                <Icon name="graduation-cap" className="text-blue-500" />
+                                Mój Planer
+                            </h1>
+                            <p className={`text-sm ${textMuted} mt-1`}>
+                                Tydzień: {getWeekId()}
+                            </p>
+                        </div>
+                        <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full ${darkMode ? 'bg-slate-700 text-yellow-400' : 'bg-slate-100 text-slate-600'}`}>
+                            <Icon name={darkMode ? "sun" : "moon"} size={20} />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-20">
+                        {DAYS.map(day => {
+                            const prog = calculateProgress(schedule[day.id]);
+                            const tutorHours = calculateTutorHours(schedule[day.id]);
+                            const isToday = todayId === day.id;
+                            
+                            return (
+                                <div 
+                                    key={day.id}
+                                    onClick={() => setActiveDay(day.id)}
+                                    className={`p-4 rounded-xl border transition-all active:scale-95 cursor-pointer shadow-sm relative overflow-hidden
+                                        ${isToday 
+                                            ? (darkMode ? 'bg-blue-900/30 border-blue-700 ring-1 ring-blue-700' : 'bg-blue-50 border-blue-200 ring-1 ring-blue-300') 
+                                            : cardClass}
+                                    `}
+                                >
+                                    <div className="flex justify-between items-center mb-2 relative z-10">
+                                        <span className={`font-bold text-lg ${textPrimary}`}>{day.label}</span>
+                                        <div className="flex gap-2">
+                                            {tutorHours > 0 && (
+                                                <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                    <Icon name="users" size={10} /> {tutorHours}h
+                                                </span>
+                                            )}
+                                            {isToday && <span className="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full shadow-sm">DZIŚ</span>}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="relative z-10">
+                                        <div className={`flex justify-between text-xs ${textMuted} mb-1`}>
+                                            <span>Postęp</span>
+                                            <span className="font-bold">{prog}%</span>
+                                        </div>
+                                        <div className={`h-2 rounded-full overflow-hidden ${darkMode ? 'bg-slate-700' : 'bg-slate-200'}`}>
+                                            <div className={`h-full transition-all duration-500 ${prog===100?'bg-green-500':'bg-blue-500'}`} style={{width: `${prog}%`}}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- WIDOK DNIA ---
+        const dayData = schedule[activeDay];
+        const isTodayView = activeDay === todayId;
+        
+        const groups = [];
+        let i = 0;
+        while(i < HOURS.length) {
+            const h = HOURS[i];
+            const slot = dayData[h];
+            let span = 1;
+            if(slot.task) {
+                while(i+span < HOURS.length && dayData[HOURS[i+span]].task === slot.task && dayData[HOURS[i+span]].category === slot.category) {
+                    span++;
+                }
+            }
+            groups.push({ start: h, span, data: slot });
+            i += span;
+        }
+
+        return (
+            <div className={`max-w-md mx-auto h-full flex flex-col ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                <div className={`p-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b shadow-sm flex items-center justify-between sticky top-0 z-20`}>
+                    <button onClick={() => setActiveDay(null)} className={`flex items-center gap-1 ${textMuted} font-medium px-2 py-1 rounded ${bgHover}`}>
+                        <Icon name="chevron-left" size={20} /> Wróć
+                    </button>
+                    <span className={`font-bold text-lg ${textPrimary}`}>{DAYS.find(d => d.id === activeDay).label}</span>
+                    <div className="w-8"></div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-3 pb-32">
+                    {groups.map((group, idx) => {
+                        const { start, span, data } = group;
+                        const isTask = !!data.task;
+                        const isUni = data.category === 'uni';
+                        const isTutor = data.category === 'tutor';
+                        const isFixed = data.fixed;
+                        
+                        const isNow = isTodayView && currentHour >= start && currentHour < (start + span);
+
+                        return (
+                            <div key={start} className={`flex mb-2 rounded-xl border transition-all relative overflow-hidden
+                                ${data.completed 
+                                    ? (darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200') 
+                                    : (darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200')}
+                                ${!data.completed && isTask && isUni ? 'border-l-4 border-l-blue-500' : ''}
+                                ${!data.completed && isTask && isTutor ? 'border-l-4 border-l-green-500' : ''}
+                                ${!isTask ? 'opacity-70 border-dashed' : 'shadow-sm'}
+                                ${isNow ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-900' : ''}
+                            `}>
+                                <div className={`w-14 ${darkMode?'bg-slate-800/50 border-slate-700':'bg-slate-50 border-slate-100'} border-r flex flex-col items-center justify-center p-2 ${textMuted}`}>
+                                    {isNow && (
+                                        <div className="absolute left-1 w-2 h-2 rounded-full bg-blue-500 pulse-animation"></div>
+                                    )}
+                                    <span className={`text-sm font-bold leading-none ${isNow ? 'text-blue-500' : ''}`}>
+                                        {data.customTime || `${start}:00`}
+                                    </span>
+                                    {span > 1 && <span className="text-[10px] opacity-60">+{span}h</span>}
+                                    <div className="mt-1">
+                                        {isUni ? <Icon name="graduation-cap" className="text-blue-500" /> : 
+                                         isTutor ? <Icon name="users" className="text-green-500" /> :
+                                         <Icon name="clock" className={darkMode ? "text-slate-600" : "text-slate-300"} />}
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 p-3 flex flex-col justify-center min-w-0">
+                                    {isTask ? (
+                                        <>
+                                            <span className={`font-medium text-sm sm:text-base leading-tight ${data.completed ? 'line-through opacity-50' : textPrimary}`}>
+                                                {data.task}
+                                            </span>
+                                            <div className="flex gap-2 mt-1">
+                                                {isFixed && <span className={`text-[10px] uppercase font-bold ${textMuted} tracking-wider`}>Stałe</span>}
+                                                {!isFixed && <span className="text-[10px] uppercase font-bold text-orange-400 tracking-wider">Dodatkowe</span>}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <input 
+                                            type="text" 
+                                            placeholder="Wpisz coś..." 
+                                            className={`w-full bg-transparent text-sm outline-none placeholder:text-slate-500 ${textPrimary}`}
+                                            value={data.task}
+                                            onChange={(e) => updateTask(activeDay, start, { task: e.target.value, category: 'personal', fixed: false })}
+                                        />
+                                    )}
+                                </div>
+
+                                {isTask && (
+                                    <button 
+                                        onClick={() => updateTask(activeDay, start, { completed: !data.completed }, span)}
+                                        className={`w-14 flex items-center justify-center border-l transition-colors
+                                            ${data.completed 
+                                                ? 'bg-green-500 border-green-600 text-white' 
+                                                : (darkMode ? 'border-slate-700 hover:text-green-400 text-slate-600' : 'border-slate-100 bg-slate-50 text-slate-300 hover:text-green-500')}
+                                        `}
+                                    >
+                                        <Icon name="check" size={24} strokeWidth={3} />
+                                    </button>
+                                )}
+                            </div>
+                        )
+                    })}
+                    
+                    {/* NOTATNIK */}
+                    <div className="mt-6 mb-4">
+                         <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${textMuted}`}>Notatki / Prace Domowe</h3>
+                         <textarea 
+                            className={`w-full h-32 p-3 rounded-lg border text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all
+                                ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600' : 'bg-white border-slate-200 text-slate-700 placeholder:text-slate-400'}
+                            `}
+                            placeholder="Wpisz tutaj zadania domowe, listę zakupów lub przypomnienia..."
+                            value={dayData.note || ""}
+                            onChange={(e) => updateNote(activeDay, e.target.value)}
+                         ></textarea>
+                    </div>
+
+                    <div className={`text-center text-xs ${textMuted} mt-2 mb-4`}>
+                        Notatki też zresetują się w poniedziałek.
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+
+</body>
+</html>
